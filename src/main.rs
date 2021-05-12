@@ -1,3 +1,7 @@
+#![doc(
+    html_root_url = "https://docs.rs/bazel-execlog-cmp/0.1.0", // remember to bump!
+)]
+
 use std::collections::{HashMap, HashSet};
 use std::env::args_os;
 use std::fmt::{self, Debug};
@@ -131,12 +135,12 @@ fn exec_log_to_hashmap<'l>(log: &'l [u8], pb: &ProgressBar) -> eyre::Result<Map<
 }
 
 struct ExecLogHelper<'l> {
-    map: &'l Vec<(&'l String, Map<'l>)>,
+    map: &'l [(&'l String, Map<'l>)],
     fuzzy_matcher: ClangdMatcher,
 }
 
 impl<'l> ExecLogHelper<'l> {
-    fn new(map: &'l Vec<(&'l String, Map<'l>)>) -> Self {
+    fn new(map: &'l [(&'l String, Map<'l>)]) -> Self {
         Self {
             map,
             fuzzy_matcher: ClangdMatcher::default().smart_case().use_cache(true),
@@ -425,6 +429,7 @@ fn transitive_cmp<'l>(
     );
     let visited = RwLock::new(HashSet::new());
 
+    #[allow(clippy::type_complexity)]
     fn traverse<'l>(
         artifact: ArtifactName<'l>,
         (envs, inps, outs): (
@@ -611,18 +616,16 @@ fn main() -> eyre::Result<()> {
                             "all executions of `{}` were equivalent",
                             path.strip_prefix("diff ").unwrap()
                         );
+                    } else if v.len() == 2 {
+                        println!(
+                            "{}",
+                            prettydiff::text::diff_lines(
+                                &format!("{:#?}", v[0].1 .0),
+                                &format!("{:#?}", v[1].1 .0),
+                            )
+                        );
                     } else {
-                        if v.len() == 2 {
-                            println!(
-                                "{}",
-                                prettydiff::text::diff_lines(
-                                    &format!("{:#?}", v[0].1 .0),
-                                    &format!("{:#?}", v[1].1 .0),
-                                )
-                            );
-                        } else {
-                            println!("can't diff more than 2 things yet, sorry!");
-                        }
+                        println!("can't diff more than 2 things yet, sorry!");
                     }
                 }
             }
