@@ -1,0 +1,23 @@
+[package]
+name = "bazel-execlog-cmp"
+version = "0.1.0"
+authors = ["Rahul Butani <>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "*", features = ["derive"] }
+serde-aux = "*"
+serde_json = "*"
+color-eyre = "*"
+hex-serde = "*"
+indicatif = { version = "*", features = ["rayon"] }
+rayon = "*"
+rustyline = "*"
+prettydiff = "*"
+fuzzy-matcher = "*"
+
+[features]
+default = []
+
+# Results in higher memory usage and takes longer to load.
+json-dump-command = []
