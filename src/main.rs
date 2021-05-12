@@ -245,6 +245,151 @@ impl<'l> Completer for ExecLogHelper<'l> {
     }
 }
 
+type ArtifactName<'l> = &'l str;
+
+fn find_mismatched<'l>(
+    artifact: ArtifactName<'l>,
+    actions: impl Iterator<Item = &'l (&'l String, &'l Arc<BuildAction<'l>>)> + 'l,
+) -> (
+    impl Iterator<Item = (ArtifactName<'l>, &'l str)> + 'l, // env vars
+    impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // inputs
+    impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // outputs
+) {
+    let mut env_vars: HashMap<&str, (&str, usize)> = HashMap::new();
+    let mut inputs: HashMap<&Path, (&Digest, usize)> = HashMap::new();
+    let mut outputs: HashMap<&Path, (&Digest, usize)> = HashMap::new();
+
+    // TODO: DRY
+    let mut num_files = 0;
+    for (_, a) in actions {
+        for e in a.0.environment_variables.iter() {
+            let (val, count) = env_vars.entry(e.name).or_insert((e.value, 0));
+            if *val == e.value {
+                *count += 1;
+            }
+        }
+
+        // `HashSet` for dedupe; inputs get listed multiple times, sometimes
+        for i in a.0.inputs.iter().collect::<HashSet<_>>().iter() {
+            let (val, count) = inputs.entry(i.path).or_insert((&i.digest, 0));
+            if *val == &i.digest {
+                *count += 1;
+            }
+        }
+
+        for o in a.0.actual_outputs.iter() {
+            let (val, count) = outputs.entry(o.path).or_insert((&o.digest, 0));
+            if *val == &o.digest {
+                *count += 1;
+            }
+        }
+
+        num_files += 1;
+    }
+
+    let mismatched_env_vars = env_vars
+        .into_iter()
+        .filter(move |(_, (_, c))| *c != num_files)
+        .map(move |(k, _)| (artifact, k));
+    let mismatched_inputs = inputs
+        .into_iter()
+        .filter(move |(_, (_, c))| *c != num_files)
+        .map(move |(k, _)| (artifact, k));
+    let mismatched_outputs = outputs
+        .into_iter()
+        .filter(move |(_, (_, c))| *c != num_files)
+        .map(move |(k, _)| (artifact, k));
+
+    (mismatched_env_vars, mismatched_inputs, mismatched_outputs)
+}
+
+fn print_mismatched<'l>(
+    (env, inp, out): (
+        impl Iterator<Item = (ArtifactName<'l>, &'l str)> + 'l, // env vars
+        impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // inputs
+        impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // outputs
+    ),
+    maps: &'l [(&'l String, Map<'l>)],
+) {
+    let mut mismatched = false;
+
+    let mut mismatched_env_vars = env.peekable();
+    if mismatched_env_vars.peek().is_some() {
+        mismatched = true;
+        println!("\n{}:", "Environment Variable Mismatches".bold());
+    }
+    for (artifact, env_name) in mismatched_env_vars {
+        println!("  ${}", env_name.blue());
+        for (f, m) in maps.iter() {
+            print!("    {:>20.20}: ", f.dimmed());
+            if let Some(v) = m[artifact]
+                .0
+                .environment_variables
+                .iter()
+                .find(|e| e.name == env_name)
+            {
+                println!("{}", v.value.yellow());
+            } else {
+                println!("{}", "<not present>".red());
+            }
+        }
+    }
+
+    fn item_mismatch_printer<'l>(
+        it: impl Iterator<Item = (ArtifactName<'l>, &'l Path)>,
+        name: &'static str,
+        ctx_to_item_vec: impl Fn(&'l ActionContext<'l>) -> &'l Vec<Item<'l>>,
+        maps: &'l [(&'l String, Map<'l>)],
+        mismatched: &mut bool,
+    ) {
+        let mut it = it.peekable();
+        if it.peek().is_some() {
+            *mismatched = true;
+            println!("\n{}:", name.bold());
+        }
+        for (artifact, path) in it {
+            println!("  `{}`", path.display().blue());
+            for (f, m) in maps.iter() {
+                print!("    {:>20.20}: ", f.dimmed());
+                if let Some(v) = ctx_to_item_vec(&m[artifact].0)
+                    .iter()
+                    .find(|i| i.path == path)
+                {
+                    println!(
+                        "{}Bytes: {:10}, {}: {}{}",
+                        "{".dimmed(),
+                        v.digest.size_bytes.yellow(),
+                        v.digest.hash_function_name,
+                        format!("{:?}", v.digest.hash).yellow(),
+                        "}".dimmed()
+                    );
+                } else {
+                    println!("{}", "<not present>".red());
+                }
+            }
+        }
+    }
+
+    item_mismatch_printer(
+        inp,
+        "Input Mismatches",
+        |a| &a.inputs,
+        maps,
+        &mut mismatched,
+    );
+    item_mismatch_printer(
+        out,
+        "Output Mismatches",
+        |a| &a.actual_outputs,
+        maps,
+        &mut mismatched,
+    );
+
+    if !mismatched {
+        println!("{}", "No mismatches!".green());
+    }
+}
+
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
@@ -297,7 +442,7 @@ fn main() -> eyre::Result<()> {
         .collect::<Result<_, _>>()?;
 
     fn get<'l>(
-        maps: &'l Vec<(&String, Map<'l>)>,
+        maps: &'l [(&'l String, Map<'l>)],
         path: &str,
     ) -> Option<Vec<(&'l String, &'l Arc<BuildAction<'l>>)>> {
         match maps
@@ -353,121 +498,9 @@ fn main() -> eyre::Result<()> {
                 }
             }
             Ok(path) if path.starts_with("cmp ") => {
-                if let Some(v) = get(&maps, path.strip_prefix("cmp ").unwrap()) {
-                    let mut env_vars: HashMap<&str, (&str, usize)> = HashMap::new();
-                    let mut inputs: HashMap<&Path, (&Digest, usize)> = HashMap::new();
-                    let mut outputs: HashMap<&Path, (&Digest, usize)> = HashMap::new();
-
-                    for (_, a) in v.iter() {
-                        for e in a.0.environment_variables.iter() {
-                            let (val, count) = env_vars.entry(e.name).or_insert((e.value, 0));
-                            if *val == e.value {
-                                *count += 1;
-                            }
-                        }
-
-                        // `HashSet` for dedupe; inputs get listed multiple times, sometimes
-                        for i in a.0.inputs.iter().collect::<HashSet<_>>().iter() {
-                            let (val, count) = inputs.entry(i.path).or_insert((&i.digest, 0));
-                            if *val == &i.digest {
-                                *count += 1;
-                            }
-                        }
-
-                        for o in a.0.actual_outputs.iter() {
-                            let (val, count) = outputs.entry(o.path).or_insert((&o.digest, 0));
-                            if *val == &o.digest {
-                                *count += 1;
-                            }
-                        }
-                    }
-
-                    let mut mismatched_env_vars = env_vars
-                        .iter()
-                        .filter(|(_, (_, c))| *c != v.len())
-                        .map(|(k, _)| *k)
-                        .peekable();
-                    let mut mismatched_inputs = inputs
-                        .iter()
-                        .filter(|(_, (_, c))| *c != v.len())
-                        .map(|(k, _)| *k)
-                        .peekable();
-                    let mut mismatched_outputs = outputs
-                        .iter()
-                        .filter(|(_, (_, c))| *c != v.len())
-                        .map(|(k, _)| *k)
-                        .peekable();
-                    let mut mismatched = false;
-
-                    // Bad, inefficient, etc.
-                    // TODO: DRY
-                    if mismatched_env_vars.peek().is_some() {
-                        mismatched = true;
-                        println!("\n{}:", "Environment Variable Mismatches".bold());
-                    }
-                    for env_name in mismatched_env_vars {
-                        println!("  ${}", env_name.blue());
-                        for (f, a) in v.iter() {
-                            print!("    {:>20.20}: ", f.dimmed());
-                            if let Some(v) =
-                                a.0.environment_variables
-                                    .iter()
-                                    .find(|e| e.name == env_name)
-                            {
-                                println!("{}", v.value.yellow());
-                            } else {
-                                println!("{}", "<not present>".red());
-                            }
-                        }
-                    }
-                    if mismatched_inputs.peek().is_some() {
-                        mismatched = true;
-                        println!("\n{}:", "Input Mismatches".bold());
-                    }
-                    for input in mismatched_inputs {
-                        println!("  `{}`", input.display().blue());
-                        for (f, a) in v.iter() {
-                            print!("    {:>20.20}: ", f.dimmed());
-                            if let Some(v) = a.0.inputs.iter().find(|i| i.path == input) {
-                                println!(
-                                    "{}Bytes: {:10}, {}: {}{}",
-                                    "{".dimmed(),
-                                    v.digest.size_bytes.yellow(),
-                                    v.digest.hash_function_name,
-                                    format!("{:?}", v.digest.hash).yellow(),
-                                    "}".dimmed()
-                                );
-                            } else {
-                                println!("{}", "<not present>".red());
-                            }
-                        }
-                    }
-                    if mismatched_outputs.peek().is_some() {
-                        mismatched = true;
-                        println!("\n{}:", "Output Mismatches".bold());
-                    }
-                    for output in mismatched_outputs {
-                        println!("  `{}`", output.display().blue());
-                        for (f, a) in v.iter() {
-                            print!("    {:>20.20}: ", f.dimmed());
-                            if let Some(v) = a.0.actual_outputs.iter().find(|o| o.path == output) {
-                                println!(
-                                    "{}Bytes: {:10}, {}: {}{}",
-                                    "{".dimmed(),
-                                    v.digest.size_bytes.yellow(),
-                                    v.digest.hash_function_name,
-                                    format!("{:?}", v.digest.hash).yellow(),
-                                    "}".dimmed()
-                                );
-                            } else {
-                                println!("{}", "<not present>".red());
-                            }
-                        }
-                    }
-
-                    if !mismatched {
-                        println!("{}", "No mismatches!".green());
-                    }
+                let artifact = path.strip_prefix("cmp ").unwrap();
+                if let Some(v) = get(&maps, artifact) {
+                    print_mismatched(find_mismatched(artifact, v.iter()), &maps);
                 }
             }
             Ok(path) if path.starts_with("view ") => {
