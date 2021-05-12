@@ -213,7 +213,7 @@ This crate has one feature: `json-dump-command`. Enabling this feature unlocks t
 
 In contrast with the `view` command, `json` prints out every detail about the execution that produced the artifact in question. This is useful if you wish to see some of the details `view` elides, i.e. the full command that's run.
 
-That this feature is _disabled_ by default. Note that enabling it roughly doubles the loading time this tool takes and greatly increases memory usage.
+This feature is _disabled_ by default. Note that enabling it roughly doubles the loading time this tool takes and greatly increases memory usage.
 
 ## should i use this?
 
