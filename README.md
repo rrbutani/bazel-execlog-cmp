@@ -53,9 +53,9 @@ Alternatively, if you'd like the full list of all the env vars/inputs/outputs th
   ```sh
   > tcmp bazel-out/k8-opt/bin/foo.out
   Environment Variable Mismatches:
-      $SOME_ENV_VAR_THATS_DIFFERENT_FOR_SOME_REASON
-            ../execlog1.json: hello
-            ../execlog2.json: 👋
+    $SOME_ENV_VAR_THATS_DIFFERENT_FOR_SOME_REASON
+          ../execlog1.json: hello
+          ../execlog2.json: 👋
 
   Input Mismatches:
     `bazel-out/k8-opt/bin/foo.o`
@@ -67,8 +67,8 @@ Alternatively, if you'd like the full list of all the env vars/inputs/outputs th
           ../execlog1.json: {Bytes:       9809, SHA-256: 9316644c2e21e3f5e238ae4b503b13935d997364b711731f1955af819e983e22}
           ../execlog2.json: {Bytes:       9809, SHA-256: a34d2d7c69bdda43de87d392439232649dfe0d787c0aced1245b8ff5b342d97a}
     `bazel-out/k8-opt/bin/foo.out`
-        ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
-        ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
+          ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
+          ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
   ```
 
 To omit artifacts that are downstream from other mismatched artifacts (and hence probably not the _source_ of discrepancies) and not the top level output, use `edges` (⚠️ warning: this command's output may not be accurate):
@@ -82,8 +82,8 @@ To omit artifacts that are downstream from other mismatched artifacts (and hence
 
   Output Mismatches:
     `bazel-out/k8-opt/bin/foo.out`
-        ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
-        ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
+          ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
+          ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
   ```
 
 There are also a few other commands:
@@ -99,7 +99,7 @@ There are also a few other commands:
     - `view <output path>` to print selected fields of interest from the action for an output path
   ```
 
-Finally, there's also tab completion with fuzzy search; this is especially handy for output paths which can be cumbersome to type in by hand.
+Finally, there's also tab completion with fuzzy search; this is especially handy for output paths which tend to be long and cumbersome to type in by hand.
 
 ## anything else?
 
@@ -211,6 +211,4 @@ I'm not sure.
 
 I didn't realize it until after writing this but there's actually a [first party tool](https://cs.opensource.google/bazel/bazel/+/master:src/tools/execlog/) that also [tries to make it easier to compare execution logs](https://docs.bazel.build/versions/master/remote-execution-caching-debug.html#comparing-the-execution-logs).
 
-It operates on the binary log format (protobuf instead of JSON; a fair bit smaller) but it's also a little more barebones: it gives you sorted text files that you can then compare with other tools.
-
-
+It operates on the binary log format (protobuf instead of JSON; a fair bit smaller) but it's also much more barebones: it gives you sorted text files that you can then compare with other tools.
