@@ -222,9 +222,8 @@ jobs:
           toolchain: ${{ matrix.rust }}
           override: true
           components: rustfmt, clippy
-          target: wasm32-wasi
 
-      - name: Generate Cargo.lock
+      - name: Update Cargo.lock
         uses: actions-rs/cargo@v1
         with:
           command: update
