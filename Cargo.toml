@@ -25,16 +25,16 @@ is-it-maintained-open-issues = { repository = "rrbutani/bazel-execlog-cmp" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-serde = { version = "*", features = ["derive"] }
-serde-aux = "*"
-serde_json = "*"
-color-eyre = "*"
-hex-serde = "*"
-indicatif = { version = "*", features = ["rayon"] }
-rayon = "*"
-rustyline = "*"
-prettydiff = "*"
-fuzzy-matcher = "*"
+serde = { version = "1.0", features = ["derive"] }
+serde-aux = "2.2"
+serde_json = "1.0"
+color-eyre = "0.5"
+hex-serde = "0.1"
+indicatif = { version = "0.16", features = ["rayon"] }
+rayon = "1.5"
+rustyline = "8.0"
+prettydiff = "0.4"
+fuzzy-matcher = "0.3"
 
 [features]
 default = []

@@ -50,7 +50,7 @@ jobs:
           # had a 0.1.0 release and a 0.2.0 release, users of the 0.1.0 release
           # would have their links to types in our crate be prefixed with
           # `docs.rs/crate-name/*` which will send them to the 0.2.0 docs.
-          grep -q "html_root_url = \"https://docs.rs/.*/${T_VER}\"" src/lib.rs || exit 4
+          grep -q "html_root_url = \"https://docs.rs/.*/${T_VER}\"" src/main.rs || exit 4
 
           # Now extract the body of the changelog entry:
           git fetch --tags
