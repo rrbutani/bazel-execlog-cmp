@@ -1,6 +1,16 @@
 # `bazel-execlog-cmp`
 
+[![Build Status][ci]][actions] [![License: {{{ license name }}}][license-badge]][license] [![crates.io][crates-badge]][crates]
+
 CLI tool that helps compare Bazel execution logs.
+
+[ci]: https://img.shields.io/endpoint.svg?url=https%3A%2F%2Factions-badge.atrox.dev%2Frrbutani%2Fbazel-execlog-cmp%2Fbadge%3Fref%3Dmain&style=for-the-badge&labelColor=505050&color=90BB7D&label=CI
+[license-badge]: https://img.shields.io/github/license/rrbutani/bazel-execlog-cmp?style=for-the-badge&logo=GNU&labelColor=505050&color=998DCB
+[crates-badge]: https://img.shields.io/crates/v/bazel-execlog-cmp?style=for-the-badge&logo=rust&labelColor=505050&color=CB8DA0
+
+[actions]: https://github.com/rrbutani/bazel-execlog-cmp/actions
+[license]: https://opensource.org/licenses/MIT
+[crates]: https://crates.io/crates/bazel-execlog-cmp
 
 ---
 
