@@ -1,0 +1,104 @@
+on:
+  push:
+    # Only on tags:
+    tags: '*.*.*'
+
+name: release
+
+jobs:
+  publish:
+    name: Publish to crates.io
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@master
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+
+      - uses: actions-rs/cargo@v1
+
+      - name: Check that the tag matches the crate version.
+        run: |
+          cargo update
+          C_VER="$(cargo pkgid | cut -d'#' -f2)"
+          T_VER="$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')"
+
+          if [[ "${C_VER}" != "${T_VER}" ]]; then
+            echo "Crate version doesn't match the tag version! (\"${C_VER}\" vs \"${T_VER}\")"
+            exit 2
+          fi
+
+      - name: Check that this version has a changelog entry and the right root_url and set up the release description.
+        id: ver
+        run: |
+          T_VER=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+          echo "::set-output name=version::${T_VER}"
+          echo "::set-output name=tag::$(echo "${T_VER}" | sed -e 's/\.//g')"
+
+          # Check that we have a changelog entry (link optional):
+          { grep -q "## ${T_VER}$" CHANGELOG.md || grep -q "## \[${T_VER}\]$" CHANGELOG.md; } || exit 3
+
+          # We want to have the exact version of this crate in the root URL so
+          # that newer releases don't cause users of older versions of this
+          # crate to have their links go to the wrong place.
+          #
+          # i.e. if we were to use docs.rs/crate-name/* as `html_root_url` and
+          # had a 0.1.0 release and a 0.2.0 release, users of the 0.1.0 release
+          # would have their links to types in our crate be prefixed with
+          # `docs.rs/crate-name/*` which will send them to the 0.2.0 docs.
+          grep -q "html_root_url = \"https://docs.rs/.*/${T_VER}\"" src/lib.rs || exit 4
+
+          # Now extract the body of the changelog entry:
+          git fetch --tags
+          PREVIOUS_TAG="$(git describe --tags $(git rev-list --skip=1 --tags --max-count=1) --abbrev=0)" && {
+            # If we *did* find a previous tag, we'll grab everything _until_ that tag's section:
+            PREVIOUS_TAG="## (\[)?${PREVIOUS_TAG}(\])?";
+          } || {
+            # If we didn't find a previous tag, we'll just grab the rest of the file:
+            PREVIOUS_TAG="";
+          }
+
+          SECTION="$(sed -nE "/## (\[)?${T_VER}(\])?$/,/${PREVIOUS_TAG}/p" CHANGELOG.md)"
+
+          # Finally we just need to trim the header (which will always be present and 1
+          # line long) and the footer (only present when there was a previous tag).
+          #
+          # To keep things simple we'll just assume there's extra stuff (like links we
+          # aren't using) at the end in the latter case that we can safely trim.
+          #
+          # This means we can just always trim the first and last line.
+          SECTION="$(echo "${SECTION}" | head -n-1 | tail -n+2)"
+
+          # To escape newlines, as per: https://github.community/t/set-output-truncates-multiline-strings/16852/5
+          SECTION="${SECTION//'%'/'%25'}"
+          SECTION="${SECTION//$'\n'/'%0A'}"
+          SECTION="${SECTION//$'\r'/'%0D'}"
+          echo "::set-output name=section::${SECTION}"
+
+          # Now check if we've got a prerelease tag:
+          PRERELEASE=false
+          { echo "${T_VER}" | grep -q "alpha"; } && PRERELEASE=true
+          echo "::set-output name=prerelease::${PRERELEASE}"
+
+
+      - name: Publish
+        run: |
+          cargo publish --token ${{ secrets.CARGO_TOKEN }}
+
+      - name: Create Release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: v${{ steps.ver.outputs.version }}
+          body: |
+            The following is from the [changelog](https://github.com/rrbutani/bazel-execlog-cmp/blob/${{ steps.ver.outputs.version }}/CHANGELOG.md#${{ steps.ver.outputs.tag }}).
+
+            ${{ steps.ver.outputs.section }}
+          draft: false
+          prerelease: ${{ steps.ver.outputs.prerelease }}
