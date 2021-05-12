@@ -20,12 +20,18 @@ When trying to [debug Bazel remote caching](https://docs.bazel.build/versions/ma
 
 In practice these logs can be quite massive making them difficult to compare by hand; this tool tries to help with that.
 
+To install:
+
+  ```bash
+  cargo install bazel-execlog-cmp
+  ```
+
 ## how do i use this
 
 First, run the tool with the paths to your execution logs:
 
   ```bash
-  cargo run --release -- <paths to a bunch of JSON execution logs>
+  bazel-execlog-cmp <paths to a bunch of JSON execution logs>
   ```
 
 Then, ask it to compare the actions for the artifacts you're interested in:
@@ -112,12 +118,6 @@ There are also a few other commands:
 Finally, there's also tab completion with fuzzy search; this is especially handy for output paths which tend to be long and cumbersome to type in by hand.
 
 ## anything else?
-
-To install this instead of cloning the repo, etc.:
-
-  ```bash
-  cargo install --git https://github.com/rrbutani/bazel-execlog-cmp
-  ```
 
 This crate has one feature: `json-dump-command`. Enabling this feature unlocks the `json` command.
 
