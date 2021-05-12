@@ -246,16 +246,32 @@ impl<'l> Completer for ExecLogHelper<'l> {
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
 
-    let files: Vec<(String, String)> = args_os()
-        .zip(args())
-        .skip(1)
-        .progress()
-        .map(|(f, n)| read_to_string(f).map(|f| (f, n)))
-        .collect::<Result<_, _>>()?;
-
-    if files.is_empty() {
+    let args = || args_os().skip(1);
+    let num_files = args().count();
+    if num_files == 0 {
         return Err(eyre!("specify 1 or more files to compare!"));
     }
+
+    let truncate_file_names = args().any(|f| f.to_str().unwrap().len() > 20)
+        && args()
+            .map(|f| PathBuf::from(&f).file_name().unwrap().to_owned())
+            .collect::<HashSet<_>>()
+            .len()
+            == num_files;
+
+    let files: Vec<(String, String)> = args()
+        .progress()
+        .map(PathBuf::from)
+        .map(|f| read_to_string(&f).map(|c| {
+            let n = if truncate_file_names {
+                f.file_name().unwrap().to_str().unwrap()
+            } else {
+                f.to_str().unwrap()
+            };
+
+            (c, n.to_owned())
+        }))
+        .collect::<Result<_, _>>()?;
 
     let p = MultiProgress::new();
     let sty = ProgressStyle::default_bar()
