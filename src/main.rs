@@ -1,8 +1,10 @@
-use std::{collections::{HashMap, HashSet}, path::PathBuf};
+use std::collections::{HashMap, HashSet};
 use std::env::args_os;
 use std::fmt::{self, Debug};
 use std::fs::read_to_string;
+use std::mem::forget;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
@@ -262,15 +264,17 @@ fn main() -> eyre::Result<()> {
     let files: Vec<(String, String)> = args()
         .progress()
         .map(PathBuf::from)
-        .map(|f| read_to_string(&f).map(|c| {
-            let n = if truncate_file_names {
-                f.file_name().unwrap().to_str().unwrap()
-            } else {
-                f.to_str().unwrap()
-            };
+        .map(|f| {
+            read_to_string(&f).map(|c| {
+                let n = if truncate_file_names {
+                    f.file_name().unwrap().to_str().unwrap()
+                } else {
+                    f.to_str().unwrap()
+                };
 
-            (c, n.to_owned())
-        }))
+                (c, n.to_owned())
+            })
+        })
         .collect::<Result<_, _>>()?;
 
     let p = MultiProgress::new();
@@ -499,6 +503,10 @@ fn main() -> eyre::Result<()> {
             _ => println!("unrecognized command!"),
         }
     }
+
+    // Since we're exiting anyways, don't bother cleaning up memory and running
+    // destructors; let the OS take care of it:
+    forget(maps);
 
     Ok(())
 }
