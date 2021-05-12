@@ -366,10 +366,10 @@ fn main() -> eyre::Result<()> {
                             }
                         }
 
-                        for i in a.0.inputs.iter() {
+                        // `HashSet` for dedupe; inputs get listed multiple times, sometimes
+                        for i in a.0.inputs.iter().collect::<HashSet<_>>().iter() {
                             let (val, count) = inputs.entry(i.path).or_insert((&i.digest, 0));
-
-                            if **val == i.digest {
+                            if *val == &i.digest {
                                 *count += 1;
                             }
                         }
@@ -421,7 +421,6 @@ fn main() -> eyre::Result<()> {
                         }
                     }
                     if mismatched_inputs.peek().is_some() {
-                        dbg!(&mismatched_inputs);
                         mismatched = true;
                         println!("\n{}:", "Input Mismatches".bold());
                     }
