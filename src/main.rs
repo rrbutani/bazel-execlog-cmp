@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 use std::mem::forget;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 use color_eyre::eyre::{self, eyre};
@@ -164,6 +164,8 @@ impl<'l> ExecLogCompletionCandidate<'l> {
         "quit",
         "help",
         "cmp",
+        "transitive-cmp",
+        "tcmp",
         #[cfg(feature = "json-dump-command")]
         "json",
         "view",
@@ -249,11 +251,11 @@ type ArtifactName<'l> = &'l str;
 
 fn find_mismatched<'l>(
     artifact: ArtifactName<'l>,
-    actions: impl Iterator<Item = &'l (&'l String, &'l Arc<BuildAction<'l>>)> + 'l,
+    actions: impl Iterator<Item = (&'l String, &'l Arc<BuildAction<'l>>)>,
 ) -> (
-    impl Iterator<Item = (ArtifactName<'l>, &'l str)> + 'l, // env vars
-    impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // inputs
-    impl Iterator<Item = (ArtifactName<'l>, &'l Path)> + 'l, // outputs
+    impl Iterator<Item = (ArtifactName<'l>, &'l str)>, // env vars
+    impl Iterator<Item = (ArtifactName<'l>, &'l Path)>, // inputs
+    impl Iterator<Item = (ArtifactName<'l>, &'l Path)>, // outputs
 ) {
     let mut env_vars: HashMap<&str, (&str, usize)> = HashMap::new();
     let mut inputs: HashMap<&Path, (&Digest, usize)> = HashMap::new();
@@ -477,6 +479,7 @@ fn main() -> eyre::Result<()> {
                     "usage:
   - `quit` or `q` to quit
   - `cmp <output path>` to compare items of interest within the action for an output path
+  - `transitive-cmp <output path>` or `tcmp` to compare all transitive dependencies of an output path
   - `diff <output path>` to print a textual diff of the fields from `view <output path>`
   - `view <output path>` to print selected fields of interest from the action for an output path"
                 );
@@ -500,8 +503,61 @@ fn main() -> eyre::Result<()> {
             Ok(path) if path.starts_with("cmp ") => {
                 let artifact = path.strip_prefix("cmp ").unwrap();
                 if let Some(v) = get(&maps, artifact) {
-                    print_mismatched(find_mismatched(artifact, v.iter()), &maps);
+                    print_mismatched(find_mismatched(artifact, v.into_iter()), &maps);
                 }
+            }
+            Ok(path) if path.starts_with("transitive-cmp ") | path.starts_with("tcmp ") => {
+                let artifact = path.split_once(" ").map(|(_, a)| a).unwrap_or("");
+                if get(&maps, artifact).is_none() {
+                    continue;
+                }
+
+                let (envs, inps, outs) = (
+                    Mutex::new(HashMap::new()),
+                    Mutex::new(HashMap::new()),
+                    Mutex::new(HashMap::new()),
+                );
+                let visited = RwLock::new(HashSet::new());
+
+                fn traverse<'l>(
+                    artifact: ArtifactName<'l>,
+                    (envs, inps, outs): (
+                        &Mutex<HashMap<&'l str, (ArtifactName<'l>, &'l str)>>,
+                        &Mutex<HashMap<&'l Path, (ArtifactName<'l>, &'l Path)>>,
+                        &Mutex<HashMap<&'l Path, (ArtifactName<'l>, &'l Path)>>,
+                    ),
+                    maps: &'l [(&'l String, Map<'l>)],
+                    visited: &RwLock<HashSet<ArtifactName<'l>>>,
+                ) {
+                    if visited.read().unwrap().contains(&artifact) {
+                        return;
+                    }
+
+                    if let Some(actions) = get(maps, artifact) {
+                        let (env, inp, out) = find_mismatched(artifact, actions.into_iter());
+                        visited.write().unwrap().insert(artifact);
+
+                        envs.lock().unwrap().extend(env.map(|p| (p.1, p)));
+                        outs.lock().unwrap().extend(out.map(|p| (p.1, p)));
+
+                        let mismatched_inputs: Vec<_> = inp.collect();
+                        inps.lock().unwrap().extend(mismatched_inputs.iter().map(|p| (p.1, *p)));
+
+                        rayon::scope(|s| {
+                            for (_, path) in mismatched_inputs {
+                                s.spawn(move |_| traverse(path.to_str().unwrap(), (envs, inps, outs), maps, visited));
+                            }
+                        })
+                    }
+                }
+
+                traverse(artifact, (&envs, &inps, &outs), &maps, &visited);
+
+                print_mismatched((
+                    envs.lock().unwrap().drain().map(|(_, v)| v),
+                    inps.lock().unwrap().drain().map(|(_, v)| v),
+                    outs.lock().unwrap().drain().map(|(_, v)| v),
+                ), &maps);
             }
             Ok(path) if path.starts_with("view ") => {
                 if let Some(v) = get(&maps, path.strip_prefix("view ").unwrap()) {

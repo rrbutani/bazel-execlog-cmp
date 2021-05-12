@@ -37,15 +37,38 @@ Typically you'll start at the top (a leaf of your build graph or just an artifac
 
   ```sh
   > cmp bazel-out/k8-opt/bin/foo.o
-    Environment Variable Mismatches:
+  Environment Variable Mismatches:
+    $SOME_ENV_VAR_THATS_DIFFERENT_FOR_SOME_REASON
+          ../execlog1.json: hello
+          ../execlog2.json: 👋
+
+  Output Mismatches:
+    `bazel-out/k8-opt/bin/foo.o`
+          ../execlog1.json: {Bytes:       9809, SHA-256: 9316644c2e21e3f5e238ae4b503b13935d997364b711731f1955af819e983e22}
+          ../execlog2.json: {Bytes:       9809, SHA-256: a34d2d7c69bdda43de87d392439232649dfe0d787c0aced1245b8ff5b342d97a}
+  ```
+
+Alternatively, if you'd like the full list of all the env vars/inputs/outputs that transitively differ across all the actions that were executed to build an artifact you can use `tcmp`:
+
+  ```sh
+  > tcmp bazel-out/k8-opt/bin/foo.out
+  Environment Variable Mismatches:
       $SOME_ENV_VAR_THATS_DIFFERENT_FOR_SOME_REASON
             ../execlog1.json: hello
             ../execlog2.json: 👋
 
-    Output Mismatches:
-      `bazel-out/k8-opt/bin/foo.o`
-            ../execlog1.json: {Bytes:       9809, SHA-256: 9316644c2e21e3f5e238ae4b503b13935d997364b711731f1955af819e983e22}
-            ../execlog2.json: {Bytes:       9809, SHA-256: a34d2d7c69bdda43de87d392439232649dfe0d787c0aced1245b8ff5b342d97a}
+  Input Mismatches:
+    `bazel-out/k8-opt/bin/foo.o`
+          ../execlog1.json: {Bytes:       9809, SHA-256: 9316644c2e21e3f5e238ae4b503b13935d997364b711731f1955af819e983e22}
+          ../execlog2.json: {Bytes:       9809, SHA-256: a34d2d7c69bdda43de87d392439232649dfe0d787c0aced1245b8ff5b342d97a}
+
+  Output Mismatches:
+    `bazel-out/k8-opt/bin/foo.o`
+          ../execlog1.json: {Bytes:       9809, SHA-256: 9316644c2e21e3f5e238ae4b503b13935d997364b711731f1955af819e983e22}
+          ../execlog2.json: {Bytes:       9809, SHA-256: a34d2d7c69bdda43de87d392439232649dfe0d787c0aced1245b8ff5b342d97a}
+    `bazel-out/k8-opt/bin/foo.out`
+        ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
+        ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
   ```
 
 There are also a few other commands:
@@ -55,6 +78,7 @@ There are also a few other commands:
   usage:
     - `quit` or `q` to quit
     - `cmp <output path>` to compare items of interest within the action for an output path
+    - `transitive-cmp <output path>` or `tcmp` to compare all transitive dependencies of an output path
     - `diff <output path>` to print a textual diff of the fields from `view <output path>`
     - `view <output path>` to print selected fields of interest from the action for an output path
   ```
