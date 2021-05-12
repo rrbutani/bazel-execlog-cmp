@@ -71,6 +71,21 @@ Alternatively, if you'd like the full list of all the env vars/inputs/outputs th
         ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
   ```
 
+To omit artifacts that are downstream from other mismatched artifacts (and hence probably not the _source_ of discrepancies) and not the top level output, use `edges` (⚠️ warning: this command's output may not be accurate):
+
+  ```sh
+  > edges bazel-out/k8-opt/bin/foo.out
+  Environment Variable Mismatches:
+    $SOME_ENV_VAR_THATS_DIFFERENT_FOR_SOME_REASON
+          ../execlog1.json: hello
+          ../execlog2.json: 👋
+
+  Output Mismatches:
+    `bazel-out/k8-opt/bin/foo.out`
+        ../execlog1.json: {Bytes:      16783, SHA-256: 8bc8118a9c5114910965057759b32c581d02963d2d3118f849b91ee92526d5b4}
+        ../execlog2.json: {Bytes:      16782, SHA-256: 7482bd31539cb3fee803d4f0fac191d1fd96d549f8aa0808cc43df3b140b6b36}
+  ```
+
 There are also a few other commands:
 
   ```sh
@@ -79,6 +94,7 @@ There are also a few other commands:
     - `quit` or `q` to quit
     - `cmp <output path>` to compare items of interest within the action for an output path
     - `transitive-cmp <output path>` or `tcmp` to compare all transitive dependencies of an output path
+    `edges <output path>` *attempts* to determine the inputs that caused the executions of the output path to diverge; may not be accurate
     - `diff <output path>` to print a textual diff of the fields from `view <output path>`
     - `view <output path>` to print selected fields of interest from the action for an output path
   ```
