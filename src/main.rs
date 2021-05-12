@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::env::{args, args_os};
+use std::{collections::{HashMap, HashSet}, path::PathBuf};
+use std::env::args_os;
 use std::fmt::{self, Debug};
 use std::fs::read_to_string;
 use std::path::Path;
@@ -11,7 +11,13 @@ use color_eyre::owo_colors::OwoColorize;
 use fuzzy_matcher::{clangd::ClangdMatcher, FuzzyMatcher};
 use indicatif::{MultiProgress, ProgressBar, ProgressIterator, ProgressStyle};
 use rayon::prelude::*;
-use rustyline::{CompletionType, Config, Editor, Helper, completion::{Candidate, Completer}, highlight::Highlighter, hint::Hinter, validate::Validator};
+use rustyline::{
+    completion::{Candidate, Completer},
+    highlight::Highlighter,
+    hint::Hinter,
+    validate::Validator,
+    CompletionType, Config, Editor, Helper,
+};
 use serde::{Deserialize, Serialize};
 use serde_aux::field_attributes::deserialize_number_from_string;
 use serde_json::de::from_slice;
@@ -300,7 +306,7 @@ fn main() -> eyre::Result<()> {
     loop {
         let inp = rl.readline(prompt.as_str());
         match inp.as_deref() {
-            Ok("quit") | Ok("q") => std::process::exit(0),
+            Ok("quit") | Ok("q") => break,
             Err(_) | Ok("help") => {
                 println!(
                     "usage:
@@ -318,7 +324,11 @@ fn main() -> eyre::Result<()> {
             Ok(path) if path.starts_with("json ") => {
                 if let Some(v) = get(&maps, path.strip_prefix("json ").unwrap()) {
                     for (f, a) in v {
-                        println!("`{}`:\n{}\n", f.green(), serde_json::to_string_pretty(&a.0)?);
+                        println!(
+                            "`{}`:\n{}\n",
+                            f.green(),
+                            serde_json::to_string_pretty(&a.0)?
+                        );
                     }
                 }
             }
@@ -352,9 +362,21 @@ fn main() -> eyre::Result<()> {
                         }
                     }
 
-                    let mut mismatched_env_vars = env_vars.iter().filter(|(_, (_, c))| *c != v.len()).map(|(k, _)| *k).peekable();
-                    let mut mismatched_inputs = inputs.iter().filter(|(_, (_, c))| *c != v.len()).map(|(k, _)| *k).peekable();
-                    let mut mismatched_outputs = outputs.iter().filter(|(_, (_, c))| *c != v.len()).map(|(k, _)| *k).peekable();
+                    let mut mismatched_env_vars = env_vars
+                        .iter()
+                        .filter(|(_, (_, c))| *c != v.len())
+                        .map(|(k, _)| *k)
+                        .peekable();
+                    let mut mismatched_inputs = inputs
+                        .iter()
+                        .filter(|(_, (_, c))| *c != v.len())
+                        .map(|(k, _)| *k)
+                        .peekable();
+                    let mut mismatched_outputs = outputs
+                        .iter()
+                        .filter(|(_, (_, c))| *c != v.len())
+                        .map(|(k, _)| *k)
+                        .peekable();
                     let mut mismatched = false;
 
                     // Bad, inefficient, etc.
@@ -367,7 +389,11 @@ fn main() -> eyre::Result<()> {
                         println!("  ${}", env_name.blue());
                         for (f, a) in v.iter() {
                             print!("    {:>20.20}: ", f.dimmed());
-                            if let Some(v) = a.0.environment_variables.iter().find(|e| e.name == env_name) {
+                            if let Some(v) =
+                                a.0.environment_variables
+                                    .iter()
+                                    .find(|e| e.name == env_name)
+                            {
                                 println!("{}", v.value.yellow());
                             } else {
                                 println!("{}", "<not present>".red());
@@ -384,7 +410,14 @@ fn main() -> eyre::Result<()> {
                         for (f, a) in v.iter() {
                             print!("    {:>20.20}: ", f.dimmed());
                             if let Some(v) = a.0.inputs.iter().find(|i| i.path == input) {
-                                println!("{}Bytes: {:10}, {}: {}{}", "{".dimmed(), v.digest.size_bytes.yellow(), v.digest.hash_function_name, format!("{:?}", v.digest.hash).yellow(), "}".dimmed());
+                                println!(
+                                    "{}Bytes: {:10}, {}: {}{}",
+                                    "{".dimmed(),
+                                    v.digest.size_bytes.yellow(),
+                                    v.digest.hash_function_name,
+                                    format!("{:?}", v.digest.hash).yellow(),
+                                    "}".dimmed()
+                                );
                             } else {
                                 println!("{}", "<not present>".red());
                             }
@@ -399,7 +432,14 @@ fn main() -> eyre::Result<()> {
                         for (f, a) in v.iter() {
                             print!("    {:>20.20}: ", f.dimmed());
                             if let Some(v) = a.0.actual_outputs.iter().find(|o| o.path == output) {
-                                println!("{}Bytes: {:10}, {}: {}{}", "{".dimmed(), v.digest.size_bytes.yellow(), v.digest.hash_function_name, format!("{:?}", v.digest.hash).yellow(), "}".dimmed());
+                                println!(
+                                    "{}Bytes: {:10}, {}: {}{}",
+                                    "{".dimmed(),
+                                    v.digest.size_bytes.yellow(),
+                                    v.digest.hash_function_name,
+                                    format!("{:?}", v.digest.hash).yellow(),
+                                    "}".dimmed()
+                                );
                             } else {
                                 println!("{}", "<not present>".red());
                             }
@@ -410,7 +450,7 @@ fn main() -> eyre::Result<()> {
                         println!("{}", "No mismatches!".green());
                     }
                 }
-            },
+            }
             Ok(path) if path.starts_with("view ") => {
                 if let Some(v) = get(&maps, path.strip_prefix("view ").unwrap()) {
                     for (f, a) in v {
@@ -443,4 +483,6 @@ fn main() -> eyre::Result<()> {
             _ => println!("unrecognized command!"),
         }
     }
+
+    Ok(())
 }
