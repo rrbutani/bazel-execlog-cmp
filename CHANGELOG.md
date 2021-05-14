@@ -6,7 +6,7 @@ Loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0).
 
 __2021-05-13__
 
-[Warn on duplicate actions for an output path instead of crashing](c8756f49d61b6e88ea2a1d35fc31c46ca159ad4b).
+[Warn on duplicate actions for an output path instead of crashing](https://github.com/rrbutani/bazel-execlog-cmp/commit/c8756f49d61b6e88ea2a1d35fc31c46ca159ad4b).
 
 
 ## [0.1.0]
