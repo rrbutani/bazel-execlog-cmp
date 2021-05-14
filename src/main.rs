@@ -1,5 +1,5 @@
 #![doc(
-    html_root_url = "https://docs.rs/bazel-execlog-cmp/0.1.0", // remember to bump!
+    html_root_url = "https://docs.rs/bazel-execlog-cmp/0.1.1", // remember to bump!
 )]
 
 use std::collections::{HashMap, HashSet};
