@@ -93,10 +93,15 @@ type Map<'l> = HashMap<Output<'l>, Arc<BuildAction<'l>>>;
 /// ```json
 /// { "foo": true, bar: 8, ... }{ "foo": false, bar: 12, ... }
 /// ```
-fn exec_log_to_hashmap<'l>(log: &'l [u8], pb: &ProgressBar) -> eyre::Result<Map<'l>> {
+fn exec_log_to_hashmap<'l>(
+    log: &'l [u8],
+    pb: &ProgressBar,
+) -> eyre::Result<(Map<'l>, HashSet<&'l str>)> {
     let mut prev = 0;
     let mut curr = 0;
     let mut map = HashMap::new();
+
+    let mut outputs_with_multiple_actions = HashSet::new();
 
     let mut process_obj = |j| -> eyre::Result<()> {
         #[cfg(feature = "json-dump-command")]
@@ -109,7 +114,9 @@ fn exec_log_to_hashmap<'l>(log: &'l [u8], pb: &ProgressBar) -> eyre::Result<Map<
             val,
         ));
         for output in action.0.listed_outputs.iter() {
-            assert!(map.insert(*output, action.clone()).is_none());
+            if map.insert(*output, action.clone()).is_some() {
+                outputs_with_multiple_actions.insert(*output);
+            }
         }
 
         Ok(())
@@ -131,7 +138,7 @@ fn exec_log_to_hashmap<'l>(log: &'l [u8], pb: &ProgressBar) -> eyre::Result<Map<
 
     pb.finish();
 
-    Ok(map)
+    Ok((map, outputs_with_multiple_actions))
 }
 
 struct ExecLogHelper<'l> {
@@ -524,7 +531,24 @@ fn main() -> eyre::Result<()> {
     let maps: Vec<(_, Map)> = maps
         .par_iter()
         .map(|(f, n, p)| exec_log_to_hashmap(f.as_bytes(), p).map(|h| (*n, h)))
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|(n, (map, dups))| {
+            if !dups.is_empty() {
+                eprintln!(
+                    "[{}] Some outputs in `{}` appear to be produced by multiple actions:",
+                    "WARNING".yellow(),
+                    n.blue()
+                );
+                for o in dups {
+                    eprintln!("  - {}", o.underline());
+                }
+                eprintln!();
+            }
+
+            (n, map)
+        })
+        .collect();
 
     let mut rl = Editor::with_config(
         Config::builder()
